@@ -1,0 +1,138 @@
+# GPIO0x Button 1
+# GPIO04 Relay
+# GPIO14 Led
+# GPIO16 Led link
+# GPIO02 Dallas one wire
+substitutions:
+  reboot_timeout_wifi: 900s
+  reboot_timeout_api: 1800s
+  output_power: 17dB
+  # Change these below
+  device_name: sinlink_term_02
+  friendly_name: "sinlink_term_02"
+captive_portal:
+logger:
+esphome:
+  name: ${device_name}
+  platform: ESP8266
+  board: esp8285
+  #on_boot:
+   # priority: 100
+   # then:
+   #   - switch.turn_on: switch1
+wifi:
+  ssid: !secret wifi_iot
+  password: !secret wifi_iot_pw
+  reboot_timeout: ${reboot_timeout_wifi}
+  output_power: ${output_power}
+  ap: # Enable fallback hotspot
+    ssid: ${device_name}
+    password: !secret wifi_esp_ap
+api:
+  reboot_timeout: ${reboot_timeout_api}
+ota:
+  password: !secret esphome_ota_pw
+time:
+  - platform: homeassistant
+    timezone: GMT0BST,M3.5.0/1,M10.5.0
+    id: esptime
+web_server:
+  port: 80
+binary_sensor:
+  - platform: status
+    name: "${friendly_name} Status"
+  #- platform: gpio
+   # pin:
+   #   number: GPIO04
+   #   mode: INPUT_PULLUP
+   #   inverted: true
+   # name: "${device_name}_button"
+   # on_press:
+   #   - switch.toggle: switch1
+   # filters:
+   #   - delayed_off: 10ms
+switch:
+  #- platform: template
+   # id: switch1
+   # icon: mdi:usb-flash-drive
+   # optimistic: true
+   # name: "${device_name}_Relay"
+   # turn_on_action:
+   #   - output.turn_on: relay
+   #   - output.turn_on: led1
+   # turn_off_action:
+   #   - output.turn_off: relay
+   #   - output.turn_off: led1
+  - platform: restart
+    name: "${friendly_name} Restart"
+text_sensor:
+  - platform: wifi_info
+    ip_address:
+      name: "${friendly_name} IP Address"
+output:
+  - platform: esp8266_pwm
+    id: ${device_name}fan
+    frequency: 50 Hz
+    pin:
+      number: GPIO04
+      inverted: true
+dallas:
+  - pin: GPIO02
+    update_interval: 5s
+light: #
+  # ... and then make a light out of it. Or in this case drive the fans
+  - platform: monochromatic
+    name: "${device_name}fan"
+    output: ${device_name}fan
+status_led:
+  pin:
+   number: GPIO14
+   inverted: false
+font:
+  - file: 'arial.ttf'
+    id: font1
+    size: 9
+  - file: 'BebasNeue-Regular.ttf'
+    id: font2
+    size: 12
+  - file: 'arial.ttf'
+    id: font3
+    size: 10
+  - file: 'arial.ttf'
+    id: font4
+    size: 18
+i2c:
+  sda: GPIO12
+  scl: GPIO14
+  scan: True
+sensor:
+  - platform: dallas #temp1
+    address: 0xD20120530D1A3C28
+    name: "${friendly_name}temp_long"
+    id: temp_top
+  - platform: dallas #temp2
+    address: 0xA6012052F0006828
+    name: "${friendly_name}temp_short"
+    id: temp_bottom
+  - platform: homeassistant #Fan PWM
+    id: fan_set
+    entity_id: input_number.fan_lvl
+  - platform: homeassistant #Screen brightness
+    id: screen_brightness
+    entity_id: input_number.moho_fridge_scr_brightness
+display:
+  - platform: ssd1306_i2c
+    model: "SH1106 128x32"
+    reset_pin: GPIO16
+    address: 0x3C
+    #rotation: 0
+    brightness: id(screen_brightness).state
+    lambda: |-
+      it.printf(127, 0, id(font3), TextAlign::TOP_RIGHT, "MoHo Fridge");
+      it.strftime(1, 0, id(font3), TextAlign::TOP_LEFT, "%H:%M:%S", id(esptime).now());
+      it.printf(0, 13, id(font1), TextAlign::TOP_LEFT, "Top Temp: ");
+      it.printf(61, 13, id(font1), TextAlign::TOP_LEFT , "%4.1f°c", id(temp_top).state);
+      it.printf(0, 22, id(font1), TextAlign::TOP_LEFT, "Bottom Temp: ");
+      it.printf(61, 22, id(font1), TextAlign::TOP_LEFT , "%4.1f°c", id(temp_bottom).state);
+      it.printf(124, 13, id(font1), TextAlign::TOP_RIGHT, "FAN");
+      it.printf(124, 22, id(font3), TextAlign::TOP_RIGHT , "%4.1f", id(fan_set).state);
